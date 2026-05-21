@@ -138,12 +138,14 @@ const researchSlice = createSlice({
       state.error = action.payload as string;
     });
 
-    // Approve plan
+    // Approve plan — backend returns immediately after marking approval.
+    // The WebSocket drives execution and emits "complete" when the writer
+    // finishes, which is what flips status to "completed".
     builder.addCase(approvePlan.pending, (state) => {
       state.status = "running";
     });
     builder.addCase(approvePlan.fulfilled, (state) => {
-      state.status = "completed";
+      state.status = "running";
     });
     builder.addCase(approvePlan.rejected, (state, action) => {
       state.status = "error";

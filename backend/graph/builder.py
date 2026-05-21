@@ -7,9 +7,11 @@ from backend.core.state import AthenaState
 from backend.nodes import (
     planner_node,
     scraper_dispatch_node,
+    scraper_dispatch_router,
     scraper_worker_node,
     rag_ingest_node,
     analyst_dispatch_node,
+    analyst_dispatch_router,
     analyst_worker_node,
     critic_node,
     writer_node,
@@ -67,15 +69,25 @@ def build_graph() -> StateGraph:
     # planner -> scraper_dispatch (interrupt_before handles human approval)
     builder.add_edge("planner", "scraper_dispatch")
 
-    # scraper_dispatch fans out via Send API (returns list of Send objects)
+    # scraper_dispatch fans out via conditional edge returning list[Send]
+    builder.add_conditional_edges(
+        "scraper_dispatch",
+        scraper_dispatch_router,
+        ["scraper_worker"],
+    )
     # scraper_worker merges results back via operator.add on scraped_docs
     builder.add_edge("scraper_worker", "rag_ingest")
 
     # After RAG ingestion -> analyst dispatch
     builder.add_edge("rag_ingest", "analyst_dispatch")
 
-    # analyst_dispatch fans out via Send API
-    # analyst_worker merges results back via operator.add on analysis
+    # analyst_dispatch fans out via conditional edge returning list[Send]
+    builder.add_conditional_edges(
+        "analyst_dispatch",
+        analyst_dispatch_router,
+        ["analyst_worker"],
+    )
+    # analyst_worker merges results back via merge_analysis on analysis
     builder.add_edge("analyst_worker", "critic")
 
     # Conditional: critic -> writer OR critic -> analyst_dispatch (retry)

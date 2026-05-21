@@ -114,19 +114,14 @@ async def approve_plan(job_id: str):
     if not state.values:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    logger.info(f"Plan approved for job {job_id}, resuming graph")
+    logger.info(f"Plan approved for job {job_id}")
 
-    # Update state with approval and resume
+    # Mark the plan approved. The WebSocket endpoint drives the graph
+    # forward via astream_events(None, ...); running ainvoke here too
+    # would double-execute the graph and block this request for minutes.
     await graph.aupdate_state(thread, {"plan_approved": True})
 
-    # Resume graph execution (runs to completion)
-    try:
-        await graph.ainvoke(None, config=thread)
-    except Exception as e:
-        logger.error(f"Graph execution failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Research failed: {str(e)}")
-
-    return ApproveResponse(status="completed")
+    return ApproveResponse(status="approved")
 
 
 @router.get("/research/{job_id}/status", response_model=StatusResponse)
@@ -141,13 +136,15 @@ async def get_status(job_id: str):
     values = state.values
     next_nodes = state.next
 
-    # Determine status
+    # Determine status. "completed" requires an actual final_report —
+    # next_nodes can be transiently empty between checkpoints while the
+    # graph is still running, so we can't infer completion from it.
     if values.get("final_report"):
         status = "completed"
-    elif next_nodes:
-        status = "awaiting_approval" if "scraper_dispatch" in next_nodes else "running"
+    elif next_nodes and "scraper_dispatch" in next_nodes:
+        status = "awaiting_approval"
     else:
-        status = "completed"
+        status = "running"
 
     current_node = next_nodes[0] if next_nodes else None
 

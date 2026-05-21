@@ -11,6 +11,10 @@ class AnalysisSection(TypedDict):
     citations: list[str]
 
 
+def merge_analysis(a: dict, b: dict) -> dict:
+    return {**(a or {}), **(b or {})}
+
+
 class AthenaState(TypedDict):
     """Full state for the Athena research graph."""
 
@@ -27,8 +31,8 @@ class AthenaState(TypedDict):
     # RAG
     vectorstore_collection: str
 
-    # Analyst outputs — operator.add merges dicts from parallel branches
-    analysis: Annotated[dict[str, AnalysisSection], operator.add]
+    # Analyst outputs — merge_analysis merges dicts from parallel branches
+    analysis: Annotated[dict[str, AnalysisSection], merge_analysis]
 
     # Critic
     critique: str

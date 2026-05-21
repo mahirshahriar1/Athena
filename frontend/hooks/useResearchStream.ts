@@ -70,7 +70,8 @@ export function useResearchStream({
   useEffect(() => {
     if (!jobId || !enabled) return;
 
-    const wsUrl = `ws://localhost:8000/api/ws/research/${jobId}`;
+    const wsBase = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+    const wsUrl = `${wsBase}/api/ws/research/${jobId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
