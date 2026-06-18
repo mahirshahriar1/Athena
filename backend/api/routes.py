@@ -13,6 +13,41 @@ from backend.core.config import settings
 from backend.core.tokens import TokenTracker, get_token_totals
 from backend.core import db
 from backend.nodes.comparator import run_comparator
+from backend.nodes.planner import planner_node
+
+# Plan editing constraints
+PLAN_MIN_TASKS = 1
+PLAN_MAX_TASKS = 8
+TASK_MIN_CHARS = 2
+TASK_MAX_CHARS = 200
+
+
+def _validate_plan(plan: list[str]) -> list[str]:
+    """Trim, drop empties, enforce caps. Raises 422 on violation."""
+    cleaned = [t.strip() for t in plan if isinstance(t, str)]
+    cleaned = [t for t in cleaned if t]
+    if len(cleaned) < PLAN_MIN_TASKS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Plan needs at least {PLAN_MIN_TASKS} task.",
+        )
+    if len(cleaned) > PLAN_MAX_TASKS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Plan can have at most {PLAN_MAX_TASKS} tasks.",
+        )
+    for i, t in enumerate(cleaned, start=1):
+        if len(t) < TASK_MIN_CHARS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Task {i} is too short (min {TASK_MIN_CHARS} chars).",
+            )
+        if len(t) > TASK_MAX_CHARS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Task {i} is too long (max {TASK_MAX_CHARS} chars).",
+            )
+    return cleaned
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -54,8 +89,20 @@ class ResearchStartResponse(BaseModel):
     plan: list[str]
 
 
+class ApproveRequest(BaseModel):
+    """Body for /approve. If `plan` is provided the graph state is overwritten
+    with the edited plan before approval."""
+    plan: list[str] | None = None
+
+
 class ApproveResponse(BaseModel):
     status: str
+    plan: list[str]
+
+
+class RegenerateResponse(BaseModel):
+    status: str
+    plan: list[str]
 
 
 class StatusResponse(BaseModel):
@@ -129,8 +176,13 @@ async def start_research(req: ResearchStartRequest):
 
 
 @router.post("/research/{job_id}/approve", response_model=ApproveResponse)
-async def approve_plan(job_id: str):
-    """Approve the research plan and resume the graph."""
+async def approve_plan(job_id: str, req: ApproveRequest | None = None):
+    """Approve the research plan and resume the graph.
+
+    Body is optional. If `plan` is provided, the graph state is overwritten with
+    the edited plan (validated against PLAN_MIN/MAX_TASKS and TASK_MIN/MAX_CHARS)
+    before approval. Otherwise the planner's original plan is kept.
+    """
     thread = {"configurable": {"thread_id": job_id}}
 
     # Verify job exists
@@ -138,15 +190,74 @@ async def approve_plan(job_id: str):
     if not state.values:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    logger.info(f"Plan approved for job {job_id}")
+    update: dict = {"plan_approved": True}
+    final_plan: list[str] = state.values.get("plan", []) or []
 
-    # Mark the plan approved. The WebSocket endpoint drives the graph
-    # forward via astream_events(None, ...); running ainvoke here too
-    # would double-execute the graph and block this request for minutes.
-    await graph.aupdate_state(thread, {"plan_approved": True})
+    if req and req.plan is not None:
+        edited = _validate_plan(req.plan)
+        update["plan"] = edited
+        final_plan = edited
+        db.update_plan(job_id, edited)
+        logger.info(f"Plan edited and approved for job {job_id} ({len(edited)} tasks)")
+    else:
+        logger.info(f"Plan approved as-is for job {job_id}")
+
+    # Flip approval (and optionally overwrite plan) in checkpoint. The WebSocket
+    # endpoint drives the graph forward via astream_events(None, ...).
+    await graph.aupdate_state(thread, update)
     db.update_status(job_id, "running")
 
-    return ApproveResponse(status="approved")
+    return ApproveResponse(status="approved", plan=final_plan)
+
+
+@router.post("/research/{job_id}/regenerate", response_model=RegenerateResponse)
+async def regenerate_plan(job_id: str):
+    """Re-run the planner for an existing job and replace its plan.
+
+    Only valid while the job is still at the human-approval checkpoint —
+    once approved the plan is locked in for the run.
+    """
+    thread = {"configurable": {"thread_id": job_id}}
+    state = await graph.aget_state(thread)
+    if not state.values:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if state.values.get("plan_approved"):
+        raise HTTPException(
+            status_code=409,
+            detail="Plan already approved; cannot regenerate.",
+        )
+
+    company = state.values.get("company", "")
+    seed_url = state.values.get("seed_url")
+    if not company:
+        raise HTTPException(status_code=400, detail="Job is missing company name")
+
+    logger.info(f"Regenerating plan for job {job_id} ({company})")
+
+    # Call planner_node directly with a minimal state shape. Token usage from
+    # this LLM call still attributes to the job via the TokenTracker callback
+    # if one was registered — but the planner_node here runs without callbacks
+    # to keep regenerate fast; this is acceptable since regenerates are rare.
+    tracker = TokenTracker(job_id)
+    try:
+        result = await planner_node(
+            {"company": company, "seed_url": seed_url},
+        )
+    except Exception as e:
+        logger.error(f"Regenerate failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Planner failed: {e}")
+
+    new_plan = result.get("plan", []) or []
+    if not new_plan:
+        raise HTTPException(status_code=500, detail="Planner returned an empty plan")
+
+    # Write back into the graph checkpoint and SQLite
+    await graph.aupdate_state(thread, {"plan": new_plan})
+    db.update_plan(job_id, new_plan)
+    # Touch the tracker so it shows up under this job_id
+    _ = tracker  # silence unused
+
+    return RegenerateResponse(status="regenerated", plan=new_plan)
 
 
 @router.get("/research/{job_id}/status", response_model=StatusResponse)

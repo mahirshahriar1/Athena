@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
-import { approvePlan, fetchReport, reset } from "@/lib/slices/researchSlice";
+import { approvePlan, fetchReport, regeneratePlan, reset } from "@/lib/slices/researchSlice";
 import { useResearchStream } from "@/hooks/useResearchStream";
 import { usePolling } from "@/hooks/usePolling";
 import PlanApproval from "@/components/PlanApproval";
@@ -46,8 +46,15 @@ export default function ResearchPage() {
     }
   }, [status, report, jobId, dispatch]);
 
-  const handleApprove = useCallback(async () => {
-    await dispatch(approvePlan(jobId));
+  const handleApprove = useCallback(
+    async (editedPlan: string[]) => {
+      await dispatch(approvePlan({ jobId, plan: editedPlan }));
+    },
+    [dispatch, jobId]
+  );
+
+  const handleRegenerate = useCallback(async () => {
+    await dispatch(regeneratePlan(jobId));
   }, [dispatch, jobId]);
 
   const handleReject = useCallback(() => {
@@ -110,6 +117,7 @@ export default function ResearchPage() {
             company={company}
             onApprove={handleApprove}
             onReject={handleReject}
+            onRegenerate={handleRegenerate}
             isLoading={status === "running"}
           />
         </div>

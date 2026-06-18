@@ -73,17 +73,44 @@ export const startResearch = createAsyncThunk(
   }
 );
 
+export interface ApprovePlanArgs {
+  jobId: string;
+  plan?: string[];
+}
+
 export const approvePlan = createAsyncThunk(
   "research/approve",
+  async (args: ApprovePlanArgs, { rejectWithValue }) => {
+    try {
+      const res = await fetch(`/api/research/${args.jobId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: args.plan ?? null }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return rejectWithValue(err.detail || "Failed to approve plan");
+      }
+
+      return await res.json();
+    } catch (err) {
+      return rejectWithValue("Network error: Could not reach backend");
+    }
+  }
+);
+
+export const regeneratePlan = createAsyncThunk(
+  "research/regenerate",
   async (jobId: string, { rejectWithValue }) => {
     try {
-      const res = await fetch(`/api/research/${jobId}/approve`, {
+      const res = await fetch(`/api/research/${jobId}/regenerate`, {
         method: "POST",
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        return rejectWithValue(err.detail || "Failed to approve plan");
+        const err = await res.json().catch(() => ({}));
+        return rejectWithValue(err.detail || "Failed to regenerate plan");
       }
 
       return await res.json();
@@ -164,11 +191,27 @@ const researchSlice = createSlice({
     builder.addCase(approvePlan.pending, (state) => {
       state.status = "running";
     });
-    builder.addCase(approvePlan.fulfilled, (state) => {
+    builder.addCase(approvePlan.fulfilled, (state, action) => {
       state.status = "running";
+      // Backend echoes the final plan (edited or original); reflect it locally.
+      if (action.payload?.plan) {
+        state.plan = action.payload.plan;
+      }
     });
     builder.addCase(approvePlan.rejected, (state, action) => {
-      state.status = "error";
+      // Stay in awaiting_approval so the user can fix and retry.
+      state.status = "awaiting_approval";
+      state.error = action.payload as string;
+    });
+
+    // Regenerate plan — replaces state.plan without leaving the approval step.
+    builder.addCase(regeneratePlan.fulfilled, (state, action) => {
+      if (action.payload?.plan) {
+        state.plan = action.payload.plan;
+      }
+      state.error = null;
+    });
+    builder.addCase(regeneratePlan.rejected, (state, action) => {
       state.error = action.payload as string;
     });
 

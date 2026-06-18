@@ -102,6 +102,14 @@ def update_status(job_id: str, status: str) -> None:
         )
 
 
+def update_plan(job_id: str, plan: list[str]) -> None:
+    with _lock, _connect() as conn:
+        conn.execute(
+            "UPDATE research_jobs SET plan_json = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(plan), _utcnow(), job_id),
+        )
+
+
 def save_completion(
     job_id: str, final_report: str, tokens: dict | None = None
 ) -> None:
