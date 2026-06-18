@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Athena — Architecture</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --panel: #18181b;
+    --panel-2: #1f1f23;
+    --border: #2a2a2f;
+    --text: #e4e4e7;
+    --text-2: #a1a1aa;
+    --text-3: #71717a;
+    --blue: #3b82f6;
+    --blue-dim: rgba(59, 130, 246, 0.15);
+    --purple: #a855f7;
+    --purple-dim: rgba(168, 85, 247, 0.15);
+    --green: #22c55e;
+    --green-dim: rgba(34, 197, 94, 0.15);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245, 158, 11, 0.12);
+    --rose: #f43f5e;
+    --rose-dim: rgba(244, 63, 94, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 Oxygen, Ubuntu, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 64px 24px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  .hero h1 {
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+    background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero .tagline {
+    color: var(--text-2);
+    font-size: 18px;
+    max-width: 640px;
+    margin: 0 auto 16px;
+  }
+  .badges {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+  }
+
+  h2 {
+    font-size: 28px;
+    font-weight: 600;
+    margin: 56px 0 16px;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 24px 0 8px;
+    color: var(--text);
+  }
+
+  p { color: var(--text-2); margin: 0 0 12px; }
+
+  /* Graph diagram */
+  .graph {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px 32px;
+    margin: 24px 0;
+    overflow-x: auto;
+  }
+  .graph-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    align-items: center;
+    min-width: 720px;
+  }
+  .row { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .node {
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    text-align: center;
+    min-width: 140px;
+    position: relative;
+  }
+  .node.start, .node.end {
+    background: var(--text-3);
+    color: var(--bg);
+    border-color: var(--text-3);
+    padding: 8px 22px;
+    min-width: 0;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .node.planner   { background: var(--blue-dim);   border-color: var(--blue);   color: var(--blue); }
+  .node.human     { background: var(--amber-dim);  border-color: var(--amber);  color: var(--amber); }
+  .node.scraper   { background: var(--green-dim);  border-color: var(--green);  color: var(--green); }
+  .node.rag       { background: var(--purple-dim); border-color: var(--purple); color: var(--purple); }
+  .node.analyst   { background: var(--green-dim);  border-color: var(--green);  color: var(--green); }
+  .node.critic    { background: var(--rose-dim);   border-color: var(--rose);   color: var(--rose); }
+  .node.writer    { background: var(--blue-dim);   border-color: var(--blue);   color: var(--blue); }
+
+  .arrow { color: var(--text-3); font-size: 18px; line-height: 1; }
+  .arrow.down { transform: rotate(0); }
+  .loop {
+    color: var(--rose);
+    font-size: 13px;
+    border: 1px dashed var(--rose);
+    padding: 6px 12px;
+    border-radius: 999px;
+    margin-top: 4px;
+  }
+  .send-label {
+    color: var(--text-3);
+    font-size: 12px;
+    margin: 0;
+  }
+
+  /* Cards */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .card h4 {
+    margin: 0 0 6px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .card p { font-size: 14px; margin: 0; color: var(--text-2); }
+  .card .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    color: var(--text-3);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  th { background: var(--panel-2); color: var(--text); font-weight: 600; }
+  td { color: var(--text-2); }
+  tr:last-child td { border-bottom: none; }
+  td code, p code, li code {
+    font-family: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
+    background: var(--panel-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    color: var(--green);
+  }
+
+  ul { color: var(--text-2); padding-left: 22px; }
+  li { margin: 6px 0; }
+  li::marker { color: var(--text-3); }
+
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+  }
+  .dot.blue   { background: var(--blue); }
+  .dot.amber  { background: var(--amber); }
+  .dot.green  { background: var(--green); }
+  .dot.purple { background: var(--purple); }
+  .dot.rose   { background: var(--rose); }
+
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-3);
+    font-size: 13px;
+  }
+  footer code { color: var(--text-2); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero">
+    <h1>Athena</h1>
+    <p class="tagline">
+      Autonomous competitive intelligence platform — multi-agent LangGraph
+      pipeline that researches a company, builds a runtime RAG index,
+      self-critiques, and ships a structured report.
+    </p>
+    <div class="badges">
+      <span class="badge">FastAPI</span>
+      <span class="badge">LangGraph</span>
+      <span class="badge">LangChain</span>
+      <span class="badge">ChromaDB</span>
+      <span class="badge">Next.js 14</span>
+      <span class="badge">Redux Toolkit</span>
+      <span class="badge">SQLite</span>
+      <span class="badge">Groq · Anthropic</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Pipeline</h2>
+    <p>
+      One <code>StateGraph</code> orchestrates the whole run. Parallel fan-out
+      uses the <code>Send</code> API; <code>operator.add</code> and a custom
+      reducer merge results from concurrent branches; a critic loop retries
+      analysts until a quality bar is met; a human-in-the-loop interrupt
+      pauses the graph for plan approval.
+    </p>
+
+    <div class="graph">
+      <div class="graph-flow">
+        <div class="row"><div class="node start">START</div></div>
+        <div class="arrow">↓</div>
+
+        <div class="row"><div class="node planner">Planner Agent</div></div>
+        <div class="arrow">↓</div>
+
+        <div class="row"><div class="node human">Human Approval (interrupt_before)</div></div>
+        <div class="arrow">↓</div>
+
+        <div class="row"><div class="node">scraper_dispatch (Send fan-out)</div></div>
+        <p class="send-label">↓ one Send per planned task</p>
+
+        <div class="row">
+          <div class="node scraper">Scraper&nbsp;1</div>
+          <div class="node scraper">Scraper&nbsp;2</div>
+          <div class="node scraper">Scraper&nbsp;…</div>
+          <div class="node scraper">Scraper&nbsp;N</div>
+        </div>
+        <p class="send-label">↓ merged via operator.add on scraped_docs</p>
+
+        <div class="row"><div class="node rag">RAG Ingestion (Chroma + chunker)</div></div>
+        <div class="arrow">↓</div>
+
+        <div class="row"><div class="node">analyst_dispatch (Send fan-out)</div></div>
+        <p class="send-label">↓ Send per analyst</p>
+
+        <div class="row">
+          <div class="node analyst">Market</div>
+          <div class="node analyst">Technical</div>
+          <div class="node analyst">Sentiment</div>
+        </div>
+        <p class="send-label">↓ merged via custom reducer on analysis</p>
+
+        <div class="row"><div class="node critic">Critic Agent</div></div>
+        <div class="row"><div class="loop">↻ score &lt; 0.75 &nbsp;and&nbsp; retries &lt; 3 &nbsp;→ loop back to analysts</div></div>
+        <div class="arrow">↓</div>
+
+        <div class="row"><div class="node writer">Writer Agent</div></div>
+        <div class="arrow">↓</div>
+
+        <div class="row"><div class="node end">END</div></div>
+      </div>
+
+      <div class="legend">
+        <span class="legend-item"><span class="dot blue"></span>Planning / Writing</span>
+        <span class="legend-item"><span class="dot amber"></span>Human-in-the-loop</span>
+        <span class="legend-item"><span class="dot green"></span>Parallel workers</span>
+        <span class="legend-item"><span class="dot purple"></span>RAG</span>
+        <span class="legend-item"><span class="dot rose"></span>Critique loop</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Nodes</h2>
+    <div class="grid">
+      <div class="card">
+        <span class="tag">Planner</span>
+        <h4>planner_node</h4>
+        <p>Asks the LLM for 4–6 concrete research tasks. If a seed URL is
+        provided, prepends a direct-load task and hints the prompt.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Scraper</span>
+        <h4>scraper_worker_node</h4>
+        <p>DuckDuckGo search → load top URLs via WebBaseLoader → LLM extracts
+        structured facts. Seed-URL tasks bypass DDG and load directly.</p>
+      </div>
+      <div class="card">
+        <span class="tag">RAG</span>
+        <h4>rag_ingest_node</h4>
+        <p>RecursiveCharacterTextSplitter (1000/200) chunks each doc, embeds
+        with BGE-small or OpenAI, persists to a per-company Chroma collection.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Analyst</span>
+        <h4>analyst_worker_node</h4>
+        <p>Three roles run in parallel (market / technical / sentiment). Each
+        queries Chroma with a role-specific keyword bag and writes a section.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Critic</span>
+        <h4>critic_node</h4>
+        <p>Scores every section 0–1 on specificity, evidence, and actionability.
+        Routes back to analysts up to 3 times if any score is below 0.75.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Writer</span>
+        <h4>writer_node</h4>
+        <p>Synthesizes all analyst sections plus critique into a Markdown
+        report with executive summary, structured sections, and a sources list.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Comparator</span>
+        <h4>run_comparator</h4>
+        <p>Off-graph: takes two completed reports and writes a side-by-side
+        comparison with a table, per-company wins, and recommendations.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>State</h2>
+    <p>
+      A single <code>TypedDict</code> in <code>backend/core/state.py</code>.
+      Annotated fields use reducers so parallel branches merge instead of
+      overwriting.
+    </p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>company</code></td><td>str</td><td>Input</td></tr>
+        <tr><td><code>seed_url</code></td><td>str | None</td><td>Optional starting URL</td></tr>
+        <tr><td><code>plan</code></td><td>list[str]</td><td>Tasks produced by planner</td></tr>
+        <tr><td><code>plan_approved</code></td><td>bool</td><td>Gates resume after interrupt</td></tr>
+        <tr><td><code>scraped_docs</code></td><td>list[dict]</td><td>Reducer: <code>operator.add</code></td></tr>
+        <tr><td><code>vectorstore_collection</code></td><td>str</td><td>Chroma collection name</td></tr>
+        <tr><td><code>analysis</code></td><td>dict[str, AnalysisSection]</td><td>Reducer: <code>merge_analysis</code></td></tr>
+        <tr><td><code>critique</code></td><td>str</td><td>Fed back into analysts on retry</td></tr>
+        <tr><td><code>retry_count</code></td><td>int</td><td>Cap at 3</td></tr>
+        <tr><td><code>final_report</code></td><td>str</td><td>Writer output</td></tr>
+        <tr><td><code>token_usage</code></td><td>dict</td><td>Populated by TokenTracker callback</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Layers</h2>
+    <div class="grid">
+      <div class="card">
+        <span class="tag">Frontend</span>
+        <h4>Next.js 14 + Redux Toolkit</h4>
+        <p>App Router, Tailwind dark theme. Redux holds research state;
+        a WebSocket hook streams graph events for the live timeline.
+        React.memo + useCallback throughout.</p>
+      </div>
+      <div class="card">
+        <span class="tag">API</span>
+        <h4>FastAPI</h4>
+        <p>REST for start / approve / status / report / history / compare;
+        WebSocket at <code>/api/ws/research/{job_id}</code> streams
+        <code>astream_events</code> output.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Orchestration</span>
+        <h4>LangGraph StateGraph</h4>
+        <p>Compiled once at startup with <code>MemorySaver</code> and
+        <code>interrupt_before=["scraper_dispatch"]</code>. Threads are
+        keyed by job_id.</p>
+      </div>
+      <div class="card">
+        <span class="tag">LLM</span>
+        <h4>Provider-agnostic via LangChain</h4>
+        <p><code>get_llm()</code> returns Groq or Anthropic per env var.
+        Both implement <code>BaseChatModel</code> so the rest of the code
+        doesn't care.</p>
+      </div>
+      <div class="card">
+        <span class="tag">RAG</span>
+        <h4>ChromaDB PersistentClient</h4>
+        <p>One collection per company. Same embedding model used for ingest
+        and query (BGE-small default; OpenAI optional).</p>
+      </div>
+      <div class="card">
+        <span class="tag">Persistence</span>
+        <h4>SQLite (stdlib)</h4>
+        <p><code>data/athena.db</code> stores past runs, comparison
+        metadata, final reports, and token totals. Survives restarts.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Observability</span>
+        <h4>TokenTracker callback</h4>
+        <p>Per-job token accumulator. Surfaces input / output / total /
+        call count in the UI badge and persists with each finished run.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Search</span>
+        <h4>DuckDuckGo (no key)</h4>
+        <p>Free, no API key required. Each scraper worker runs one query
+        and loads the top 3 URLs via <code>WebBaseLoader</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Request lifecycle</h2>
+    <ol style="color: var(--text-2);">
+      <li><code>POST /api/research/start</code> — graph runs <code>planner</code>, pauses at the <code>interrupt_before</code> on <code>scraper_dispatch</code>. SQLite row inserted.</li>
+      <li>Frontend shows the plan; user approves.</li>
+      <li><code>POST /api/research/{id}/approve</code> — flips <code>plan_approved=True</code> in graph state, returns immediately.</li>
+      <li>Frontend opens WebSocket. Backend calls <code>astream_events(None, ...)</code> which resumes from the checkpoint and emits node-start / token-stream / node-end events in real time.</li>
+      <li>Critic may loop back to analysts up to 3×.</li>
+      <li>Writer emits the final report. WS sends <code>complete</code> with token totals. Report and tokens persist to SQLite.</li>
+      <li>Frontend fetches <code>GET /api/research/{id}/report</code> and renders the Markdown.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>Generated for the Athena codebase · See <code>backend/graph/builder.py</code> for the source-of-truth graph wiring.</p>
+  </footer>
+
+</div>
+</body>
+</html>
