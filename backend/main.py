@@ -5,6 +5,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import settings
+from backend.core.db import init_db
 from backend.api.routes import router
 from backend.api.ws import research_websocket
 
@@ -54,6 +55,7 @@ async def startup():
     logger.info("Athena backend starting up")
     logger.info(f"CORS origins: {settings.CORS_ORIGINS}")
     logger.info(f"ChromaDB dir: {settings.CHROMA_PERSIST_DIR}")
+    init_db()
 
 
 if __name__ == "__main__":

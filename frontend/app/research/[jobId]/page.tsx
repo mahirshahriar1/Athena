@@ -10,6 +10,7 @@ import PlanApproval from "@/components/PlanApproval";
 import AgentTimeline from "@/components/AgentTimeline";
 import ReportViewer from "@/components/ReportViewer";
 import StatusBadge from "@/components/StatusBadge";
+import TokenBadge from "@/components/TokenBadge";
 import { ArrowLeft } from "lucide-react";
 
 export default function ResearchPage() {
@@ -18,7 +19,7 @@ export default function ResearchPage() {
   const dispatch = useAppDispatch();
 
   const jobId = params.jobId as string;
-  const { status, plan, company, events, currentNode, report, error } =
+  const { status, plan, company, events, currentNode, report, tokens, error } =
     useAppSelector((state) => state.research);
 
   // WebSocket streaming when running
@@ -82,6 +83,7 @@ export default function ResearchPage() {
               Live
             </span>
           )}
+          <TokenBadge tokens={tokens} />
           <StatusBadge status={status} />
         </div>
       </div>

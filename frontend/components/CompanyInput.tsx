@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useCallback, useMemo, useState } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, Globe } from "lucide-react";
 
 interface CompanyInputProps {
-  onSubmit: (company: string) => void;
+  onSubmit: (company: string, websiteUrl?: string) => void;
   isLoading: boolean;
 }
 
@@ -12,18 +12,26 @@ const CompanyInput = React.memo(function CompanyInput({
   onSubmit,
   isLoading,
 }: CompanyInputProps) {
-  const [value, setValue] = useState("");
+  const [company, setCompany] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
 
-  const isValid = useMemo(() => value.trim().length >= 2, [value]);
+  const isValid = useMemo(() => company.trim().length >= 2, [company]);
 
   const isDisabled = useMemo(
     () => !isValid || isLoading,
     [isValid, isLoading]
   );
 
-  const handleChange = useCallback(
+  const handleCompanyChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setValue(e.target.value);
+      setCompany(e.target.value);
+    },
+    []
+  );
+
+  const handleUrlChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setWebsiteUrl(e.target.value);
     },
     []
   );
@@ -32,19 +40,19 @@ const CompanyInput = React.memo(function CompanyInput({
     (e: React.FormEvent) => {
       e.preventDefault();
       if (isValid && !isLoading) {
-        onSubmit(value.trim());
+        onSubmit(company.trim(), websiteUrl.trim() || undefined);
       }
     },
-    [value, isValid, isLoading, onSubmit]
+    [company, websiteUrl, isValid, isLoading, onSubmit]
   );
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-xl">
+    <form onSubmit={handleSubmit} className="w-full max-w-xl space-y-3">
       <div className="relative">
         <input
           type="text"
-          value={value}
-          onChange={handleChange}
+          value={company}
+          onChange={handleCompanyChange}
           placeholder="Enter a company name (e.g., Notion, Stripe)"
           disabled={isLoading}
           className="w-full px-5 py-4 pr-14 rounded-xl bg-zinc-900 border border-zinc-700
@@ -68,8 +76,25 @@ const CompanyInput = React.memo(function CompanyInput({
           )}
         </button>
       </div>
-      {!isValid && value.length > 0 && (
-        <p className="mt-2 text-sm text-zinc-500">
+
+      <div className="relative">
+        <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+        <input
+          type="text"
+          value={websiteUrl}
+          onChange={handleUrlChange}
+          placeholder="Optional: primary website (e.g., notion.so)"
+          disabled={isLoading}
+          className="w-full pl-11 pr-5 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800
+                     text-zinc-200 placeholder-zinc-600 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition-all duration-200"
+        />
+      </div>
+
+      {!isValid && company.length > 0 && (
+        <p className="text-sm text-zinc-500">
           Enter at least 2 characters
         </p>
       )}

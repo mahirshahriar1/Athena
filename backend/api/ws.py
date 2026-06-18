@@ -4,6 +4,8 @@ import logging
 import json
 from fastapi import WebSocket, WebSocketDisconnect
 from backend.graph.builder import graph
+from backend.core.tokens import TokenTracker, get_token_totals
+from backend.core import db
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,11 @@ async def research_websocket(websocket: WebSocket, job_id: str):
     - {"type": "complete", "job_id": "..."}
     """
     await websocket.accept()
-    thread = {"configurable": {"thread_id": job_id}}
+    tracker = TokenTracker(job_id)
+    thread = {
+        "configurable": {"thread_id": job_id},
+        "callbacks": [tracker],
+    }
 
     logger.info(f"WebSocket connected for job {job_id}")
 
@@ -69,10 +75,25 @@ async def research_websocket(websocket: WebSocket, job_id: str):
                         "output": safe_output,
                     })
 
-        # Signal completion
+        # Persist final report + token totals to SQLite so /history and a
+        # post-restart /report fallback work.
+        try:
+            state = await graph.aget_state({"configurable": {"thread_id": job_id}})
+            final_report = state.values.get("final_report") if state.values else None
+            if final_report:
+                db.save_completion(
+                    job_id=job_id,
+                    final_report=final_report,
+                    tokens=get_token_totals(job_id),
+                )
+        except Exception as save_err:
+            logger.warning(f"Could not persist completion for {job_id}: {save_err}")
+
+        # Signal completion (with token totals)
         await websocket.send_json({
             "type": "complete",
             "job_id": job_id,
+            "tokens": get_token_totals(job_id),
         })
 
     except WebSocketDisconnect:

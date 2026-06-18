@@ -20,6 +20,7 @@ class AthenaState(TypedDict):
 
     # Input
     company: str
+    seed_url: str | None
 
     # Planner output
     plan: list[str]
@@ -40,3 +41,6 @@ class AthenaState(TypedDict):
 
     # Final
     final_report: str
+
+    # Token usage (populated by TokenTracker callback)
+    token_usage: dict

@@ -6,7 +6,8 @@ import { useAppDispatch, useAppSelector } from "@/lib/store";
 import { startResearch, setCompany } from "@/lib/slices/researchSlice";
 import CompanyInput from "@/components/CompanyInput";
 import StatusBadge from "@/components/StatusBadge";
-import { Brain, Zap, Shield, Clock } from "lucide-react";
+import HistoryList from "@/components/HistoryList";
+import { Brain, Zap, Shield, Clock, GitCompare } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
@@ -19,9 +20,9 @@ export default function HomePage() {
   );
 
   const handleSubmit = useCallback(
-    async (company: string) => {
+    async (company: string, websiteUrl?: string) => {
       dispatch(setCompany(company));
-      const result = await dispatch(startResearch(company));
+      const result = await dispatch(startResearch({ company, websiteUrl }));
 
       if (startResearch.fulfilled.match(result)) {
         router.push(`/research/${result.payload.job_id}`);
@@ -72,6 +73,16 @@ export default function HomePage() {
       {/* Input */}
       <CompanyInput onSubmit={handleSubmit} isLoading={isLoading} />
 
+      {/* Compare CTA */}
+      <button
+        onClick={() => router.push("/compare")}
+        className="mt-4 inline-flex items-center gap-2 text-sm text-zinc-400
+                   hover:text-blue-400 transition-colors"
+      >
+        <GitCompare className="w-4 h-4" />
+        Or compare two companies side-by-side →
+      </button>
+
       {/* Error display */}
       {error && (
         <div className="mt-4 px-4 py-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm max-w-xl">
@@ -85,6 +96,11 @@ export default function HomePage() {
           <StatusBadge status={status} />
         </div>
       )}
+
+      {/* History */}
+      <div className="mt-10 w-full flex justify-center">
+        <HistoryList />
+      </div>
 
       {/* Features grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-16 max-w-2xl w-full">

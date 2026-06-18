@@ -5,6 +5,7 @@ import re
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.document_loaders import WebBaseLoader
 from backend.core.llm import get_llm
+from backend.nodes.planner import SEED_TASK_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +44,29 @@ async def scraper_worker_node(state: dict) -> dict:
 
     logger.info(f"Scraping: '{task}' for {company}")
 
-    # Step 1: Search with DuckDuckGo
-    query = f"{company} {task}"
-    try:
-        search_results = search_tool.run(query)
-    except Exception as e:
-        logger.warning(f"Search failed for '{query}': {e}")
-        return {
-            "scraped_docs": [{
-                "task": task,
-                "content": f"Search failed: {str(e)}",
-                "sources": [],
-            }]
-        }
+    # Seed-URL fast path: when the planner injected a "Scrape and summarize <url>"
+    # task, load the URL directly and skip DuckDuckGo.
+    if task.startswith(SEED_TASK_PREFIX):
+        seed_url = task[len(SEED_TASK_PREFIX):].strip()
+        search_results = ""
+        urls = [seed_url]
+    else:
+        # Step 1: Search with DuckDuckGo
+        query = f"{company} {task}"
+        try:
+            search_results = search_tool.run(query)
+        except Exception as e:
+            logger.warning(f"Search failed for '{query}': {e}")
+            return {
+                "scraped_docs": [{
+                    "task": task,
+                    "content": f"Search failed: {str(e)}",
+                    "sources": [],
+                }]
+            }
+        urls = _extract_urls(search_results)
 
     # Step 2: Load top URLs for full content
-    urls = _extract_urls(search_results)
     loaded_content = []
 
     for url in urls:

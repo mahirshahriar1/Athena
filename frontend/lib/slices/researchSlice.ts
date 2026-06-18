@@ -10,6 +10,13 @@ export interface TimelineEvent {
   timestamp: string;
 }
 
+export interface TokenUsage {
+  input: number;
+  output: number;
+  total: number;
+  calls: number;
+}
+
 export interface ResearchState {
   jobId: string | null;
   company: string;
@@ -18,6 +25,7 @@ export interface ResearchState {
   events: TimelineEvent[];
   currentNode: string | null;
   report: string | null;
+  tokens: TokenUsage | null;
   error: string | null;
 }
 
@@ -29,19 +37,28 @@ const initialState: ResearchState = {
   events: [],
   currentNode: null,
   report: null,
+  tokens: null,
   error: null,
 };
 
 // --- Async Thunks ---
 
+export interface StartResearchArgs {
+  company: string;
+  websiteUrl?: string;
+}
+
 export const startResearch = createAsyncThunk(
   "research/start",
-  async (company: string, { rejectWithValue }) => {
+  async (args: StartResearchArgs, { rejectWithValue }) => {
     try {
       const res = await fetch("/api/research/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company }),
+        body: JSON.stringify({
+          company: args.company,
+          website_url: args.websiteUrl || null,
+        }),
       });
 
       if (!res.ok) {
@@ -118,6 +135,9 @@ const researchSlice = createSlice({
         state.status = "error";
       }
     },
+    setTokens(state, action: PayloadAction<TokenUsage>) {
+      state.tokens = action.payload;
+    },
     reset() {
       return initialState;
     },
@@ -155,6 +175,9 @@ const researchSlice = createSlice({
     // Fetch report
     builder.addCase(fetchReport.fulfilled, (state, action) => {
       state.report = action.payload.report;
+      if (action.payload.tokens) {
+        state.tokens = action.payload.tokens;
+      }
       if (action.payload.report) {
         state.status = "completed";
       }
@@ -165,7 +188,7 @@ const researchSlice = createSlice({
   },
 });
 
-export const { setCompany, addEvent, setCurrentNode, setStatus, setError, reset } =
+export const { setCompany, addEvent, setCurrentNode, setStatus, setError, setTokens, reset } =
   researchSlice.actions;
 
 export default researchSlice.reducer;

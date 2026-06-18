@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppDispatch } from "@/lib/store";
-import { addEvent, setCurrentNode, setStatus, setError, TimelineEvent } from "@/lib/slices/researchSlice";
+import { addEvent, setCurrentNode, setStatus, setError, setTokens, TimelineEvent } from "@/lib/slices/researchSlice";
 
 interface UseResearchStreamOptions {
   jobId: string | null;
@@ -55,6 +55,9 @@ export function useResearchStream({
             break;
           case "complete":
             dispatch(setStatus("completed"));
+            if (data.tokens) {
+              dispatch(setTokens(data.tokens));
+            }
             break;
           case "error":
             dispatch(setError(data.message));
